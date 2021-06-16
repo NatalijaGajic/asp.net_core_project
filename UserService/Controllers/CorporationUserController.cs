@@ -3,7 +3,9 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using AutoMapper;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Data.SqlClient;
@@ -11,6 +13,9 @@ using UserService.Data;
 using UserService.Dtos;
 using UserService.Dtos.Users;
 using UserService.Entities;
+using UserService.Exceptions;
+using UserService.Filters;
+using UserService.Services.Users;
 
 namespace UserService.Controllers
 {
@@ -22,42 +27,50 @@ namespace UserService.Controllers
     [Route("api/corporationUsers")]
     public class CorporationUserController : ControllerBase
     {
-        private readonly ICorporationUserRepository corporationUserRepository;
-        private readonly IMapper mapper;
-        private readonly LinkGenerator linkGenerator;
-        private readonly IRoleRepository roleRepository;
-        private readonly ICityRepository cityRepository;
-        private readonly IPersonalUserRepository personalUserRepository;
+        private readonly ICorporationUsersService _corporationUsersService;
+        private readonly IMapper _mapper;
+        private readonly LinkGenerator _linkGenerator;
 
-        public CorporationUserController(ICorporationUserRepository corporationUserRepository, IMapper mapper, 
-            LinkGenerator linkGenerator, IRoleRepository roleRepository, ICityRepository cityRepository, IPersonalUserRepository personalUserRepository)
+        public CorporationUserController(IMapper mapper, 
+            LinkGenerator linkGenerator, ICorporationUsersService corporationUsersService)
         {
-            this.corporationUserRepository = corporationUserRepository;
-            this.mapper = mapper;
-            this.linkGenerator = linkGenerator;
-            this.roleRepository = roleRepository;
-            this.cityRepository = cityRepository;
-            this.personalUserRepository = personalUserRepository;
+            _mapper = mapper;
+            _linkGenerator = linkGenerator;
+            _corporationUsersService = corporationUsersService;
         }
 
         /// <summary>
         /// Returns list of all corporation user accounts in the system
         /// </summary>
         /// <param name="city">Name of the city</param>
+        /// <param name="username">User username</param>
         /// <returns>List of corporation user accounts</returns>
         /// <response code="200">Returns the list</response>
         /// <response code="204">No user accounts are found</response>
+        /// <response code="401">Unauthorized user</response>
+        /// <response code="500">There was an error on the server</response>
+        [Authorize]
         [HttpGet]
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status204NoContent)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
         public ActionResult<List<CorporationDto>> GetUsers(string city, string username)
         {
-            var croporationUsers = corporationUserRepository.GetUsers(city, username);
-            if (croporationUsers == null || croporationUsers.Count == 0)
-            {
-                return NoContent();
+            try {
+                var croporationUsers = _corporationUsersService.GetUsers(city, username);
+                if (croporationUsers == null || croporationUsers.Count == 0)
+                {
+                    return NoContent();
+                }
+                return Ok(_mapper.Map<List<CorporationDto>>(croporationUsers));
             }
-            return Ok(mapper.Map<List<CorporationDto>>(croporationUsers));
+            catch(Exception ex)
+            {
+                return StatusCode(StatusCodes.Status500InternalServerError, ex.Message);
+
+            }
+
         }
 
         /// <summary>
@@ -67,17 +80,29 @@ namespace UserService.Controllers
         /// <returns>Corporation user with userId</returns>
         ///<response code="200">Returns the user</response>
         /// <response code="404">User with userId is not found</response>
+        /// <response code="401">Unauthorized user</response>
+        /// <response code="500">There was an error on the server</response>
+        [Authorize]
         [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
+        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
         [HttpGet("{userId}")]
         public ActionResult<CorporationDto> GetUserById(Guid userId)
         {
-            var croporationUser = corporationUserRepository.GetUserByUserId(userId);
-            if (croporationUser == null)
+            try
             {
-                return NotFound();
+                var croporationUser = _corporationUsersService.GetUserByUserId(userId);
+                if (croporationUser == null)
+                {
+                    return NotFound();
+                }
+                return Ok(_mapper.Map<CorporationDto>(croporationUser));
             }
-            return Ok(mapper.Map<CorporationDto>(croporationUser));
+            catch (Exception ex)
+            {
+                return StatusCode(StatusCodes.Status500InternalServerError, ex.Message);
+            }
         }
 
         //TODO: Provide example body
@@ -87,31 +112,38 @@ namespace UserService.Controllers
         /// <param name="corporationUser">Model of corporation user</param>
         /// <returns>Confirmation of the creation of corporation user</returns>
         /// <response code="200">Returns the created corporation user</response>
+        ///<response code="409">Unique value violation</response>
+        /// <response code="422">Constraint violation</response>
         /// <response code="500">There was an error on the server</response>
         [HttpPost]
         [Consumes("application/json")]
         [ProducesResponseType(StatusCodes.Status201Created)]
+        [ProducesResponseType(StatusCodes.Status409Conflict)]
+        [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
         [ProducesResponseType(StatusCodes.Status500InternalServerError)]
-        public ActionResult<CorporationUserCreatedConfirmationDto> CreateUser([FromBody] CorporationUserCreationDto corporationUser)
+        public async Task<ActionResult<CorporationUserCreatedConfirmationDto>> CreateUser([FromBody] CorporationUserCreationDto corporationUser)
         {
             try
             {
-                var user = personalUserRepository.GetUsers(null, corporationUser.Username);
-                if (user != null && user.Count > 0)
-                {
-                    //Unique violation
-                    return StatusCode(StatusCodes.Status409Conflict);
-                }
-                Corporation userEntity = mapper.Map<Corporation>(corporationUser);
-                CorporationUserCreatedConfirmation userCreated = corporationUserRepository.CreateUser(userEntity);
-                corporationUserRepository.SaveChanges();
+                
+                Corporation userEntity = _mapper.Map<Corporation>(corporationUser);
+                CorporationUserCreatedConfirmation userCreated = _corporationUsersService.CreateUser(userEntity, corporationUser.Password).Result;
+               
 
-                string location = linkGenerator.GetPathByAction("GetUserById", "CorporationUser", new { userId = userCreated.UserId });
-
-                return Created(location, mapper.Map<CorporationUserCreatedConfirmationDto>(userCreated));
+                string location = _linkGenerator.GetPathByAction("GetUserById", "CorporationUser", new { userId = userCreated.UserId });
+                return Created(location, _mapper.Map<CorporationUserCreatedConfirmationDto>(userCreated));
             }
             catch (Exception ex)
             {
+                if (ex.GetType().IsAssignableFrom(typeof(ForeignKeyConstraintViolationException)))
+                {
+                    return StatusCode(StatusCodes.Status409Conflict, ex.Message);
+                }
+                if (ex.GetType().IsAssignableFrom(typeof(UniqueValueViolationException)))
+                {
+                    return StatusCode(StatusCodes.Status422UnprocessableEntity, ex.Message);
+
+                }
                 if (ex.GetBaseException().GetType() == typeof(SqlException))
                 {
                     Int32 ErrorCode = ((SqlException)ex.InnerException).Number;
@@ -137,44 +169,47 @@ namespace UserService.Controllers
         /// <param name="userId">User's Id</param>
         /// <returns>Confirmation of update</returns>
         /// <response code="200">Returns updated user</response>
-        /// <response code="400">Corporation user with userId is not found</response>
+        /// <response code="404">Corporation user with userId is not found</response>
+        ///<response code="400">User doesn't own the resource</response>
+        /// <response code="401">Unauthorized user</response>
+        ///<response code="409">Unique value violation</response>
+        /// <response code="422">Constraint violation</response>
         /// <response code="500">Error on the server while updating</response>
+        [Authorize]
+        [ServiceFilter(typeof(ResourceOwnerFilter))]
         [HttpPut("{userId}")]
         [Consumes("application/json")]
-        [ProducesResponseType(StatusCodes.Status404NotFound)]
         [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        [ProducesResponseType(StatusCodes.Status409Conflict)]
+        [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
         [ProducesResponseType(StatusCodes.Status500InternalServerError)]
         public ActionResult<CorporationDto> UpdateUser([FromBody] CorporationUserUpdateDto corporationUser, Guid userId)
         {
             try
             {
-                var userWithId = corporationUserRepository.GetUserByUserId(userId);
+                var userWithId = _corporationUsersService.GetUserByUserId(userId);
                 if (userWithId == null)
                 {
                     return NotFound();
                 }
-                var user = personalUserRepository.GetUsers(null, corporationUser.Username);
-                if (user != null && user.Count > 0)
-                {
-                    //Unique violation
-                    return StatusCode(StatusCodes.Status409Conflict);
-                }
-                //TODO: Role can be changed only by admin, PATCH 
-                //TODO: Cleaner code
-                //TODO: Bad foreign keys, unique
-                //TODO: Password change PATCH?
-                Corporation updatedUser = mapper.Map<Corporation>(corporationUser);
-                updatedUser.RoleId = userWithId.RoleId;
-                updatedUser.Role = roleRepository.GetRoleByRoleId(userWithId.RoleId);
-                updatedUser.City = cityRepository.GetCityByCityId(updatedUser.CityId);
-                //If updated.City is null FK violation
-                updatedUser.UserId = userId;
-                mapper.Map(updatedUser, userWithId);
-                corporationUserRepository.SaveChanges();
-                return Ok(mapper.Map<CorporationDto>(userWithId));
+                Corporation corporation = _mapper.Map<Corporation>(corporationUser);
+                _corporationUsersService.UpdateUser(corporation, userWithId);
+
+                return Ok(_mapper.Map<CorporationDto>(userWithId));
             }
             catch (Exception ex)
             {
+                if (ex.GetType().IsAssignableFrom(typeof(ForeignKeyConstraintViolationException)))
+                {
+                    return StatusCode(StatusCodes.Status409Conflict, ex.Message);
+                }
+                if (ex.GetType().IsAssignableFrom(typeof(UniqueValueViolationException)))
+                {
+                    return StatusCode(StatusCodes.Status422UnprocessableEntity, ex.Message);
+                }
                 if (ex.GetBaseException().GetType() == typeof(SqlException))
                 {
                     Int32 ErrorCode = ((SqlException)ex.InnerException).Number;
@@ -200,23 +235,29 @@ namespace UserService.Controllers
         /// <param name="userId">User's Id</param>
         /// <returns>Status 204 (NoContent)</returns>
         /// <response code="204">User succesfully deleted</response>
+        ///<response code="400">User doesn't own the resource</response>
+        /// <response code="401">Unauthorized user</response>
         /// <response code="404">User with userId not found</response>
-        /// <response code="500">Error on the server while deleting</response>
+        /// <response code="500">Error on the server while updating</response>
+        [Authorize]
+        [ServiceFilter(typeof(ResourceOwnerFilter))]
         [ProducesResponseType(StatusCodes.Status204NoContent)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
         [ProducesResponseType(StatusCodes.Status500InternalServerError)]
         [HttpDelete("{userId}")]
         public IActionResult DeleteUser(Guid userId)
         {
             try
             {
-                var user = corporationUserRepository.GetUserByUserId(userId);
+                var user = _corporationUsersService.GetUserByUserId(userId);
                 if (user == null)
                 {
                     return NotFound();
                 }
-                corporationUserRepository.DeleteUser(userId);
-                corporationUserRepository.SaveChanges();
+                _corporationUsersService.DeleteUser(userId);
+
                 return NoContent();
             }
             catch (Exception)

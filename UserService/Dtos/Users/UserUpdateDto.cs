@@ -7,15 +7,7 @@ namespace UserService.Dtos.Users
 {
     public class UserUpdateDto
     {
-        /// <summary>
-        /// User's email
-        /// </summary>
-        public String Email { get; set; }
-
-        /// <summary>
-        /// User's password
-        /// </summary>
-        public String Password { get; set; }
+        //Email and password shouldn't be updated
 
         /// <summary>
         /// Boolean value which indicates if user's account

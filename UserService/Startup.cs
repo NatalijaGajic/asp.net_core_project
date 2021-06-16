@@ -18,6 +18,15 @@ using UserService.Filters;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.AspNetCore.Mvc.Infrastructure;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.OpenApi.Models;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.IdentityModel.Tokens;
+using System.Text;
+using UserService.Options;
+using UserService.Services;
+using UserService.Services.Cities;
+using UserService.Services.Users;
 
 namespace UserService
 {
@@ -90,12 +99,54 @@ namespace UserService
                 };
             });
             services.AddDbContext<UserDbContext>();
+            services.AddDbContext<IdentityUserDbContext>();
+            //Adding Identity
+            services.AddIdentity<AccountInfo, AccountRole>(options =>
+            {
+                options.Password.RequireDigit = false;
+                options.Password.RequireNonAlphanumeric = false;
+                options.Password.RequiredLength = 6;
+                options.Password.RequireLowercase = false;
+                options.Password.RequireUppercase = false;
+            }).AddEntityFrameworkStores<IdentityUserDbContext>();
+
             services.AddAutoMapper(AppDomain.CurrentDomain.GetAssemblies());
 
             services.AddScoped<IPersonalUserRepository, PersonalUserRepository>();
             services.AddScoped<ICorporationUserRepository, CorporationUserRepository>();
             services.AddScoped<ICityRepository, CityRepository>();
             services.AddScoped<IRoleRepository, RoleRepository>();
+            services.AddScoped<IPersonalUsersService, PersonalUsersService>();
+            services.AddScoped<ICitiesService, CitiesService>();
+            services.AddScoped<ICorporationUsersService, CorporationUsersService>();
+            services.AddScoped<ResourceOwnerFilter>();
+
+
+            var jwtSettings = new JwtSettings();
+            Configuration.Bind(nameof(jwtSettings), jwtSettings);
+            services.AddSingleton(jwtSettings);
+
+
+            services.AddAuthentication(x =>
+            {
+                x.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+                x.DefaultScheme = JwtBearerDefaults.AuthenticationScheme;
+                x.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+            })
+              .AddJwtBearer(x =>
+              {
+                  x.SaveToken = true;
+                  x.TokenValidationParameters = new TokenValidationParameters
+                  {
+                      ValidateIssuerSigningKey = true,
+                      IssuerSigningKey = new SymmetricSecurityKey(Encoding.ASCII.GetBytes(jwtSettings.Secret)),
+                      ValidateIssuer = false,
+                      ValidateAudience = false,
+                      RequireExpirationTime = false,
+                      ValidateLifetime = true
+                  };
+              });
+
 
             services.AddSwaggerGen(setupAction =>
             {
@@ -115,17 +166,43 @@ namespace UserService
                             Name = "FTN licence"
                         }
                     });
+                setupAction.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+                {
+                    Description = "JWT Authorization header using the Bearer scheme. \r\n\r\n Enter 'Bearer' [space] and then your token in the text input below.\r\n\r\nExample: \"Bearer 12345abcdef\"",
+                    Name = "Authorization",
+                    In = ParameterLocation.Header,
+                    Type = SecuritySchemeType.ApiKey,
+                    Scheme = "Bearer"
+                });
+                setupAction.AddSecurityRequirement(new OpenApiSecurityRequirement()
+                {
+                    {
+                        new OpenApiSecurityScheme
+                        {
+                            Reference = new OpenApiReference
+                            {
+                                Type = ReferenceType.SecurityScheme,
+                                Id = "Bearer"
+                            },
+                            Scheme = "oauth2",
+                            Name = "Bearer",
+                            In = ParameterLocation.Header,
 
+                        },
+                        new List<string>()
+                    }
+                });
             });
         }
 
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
-        public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
+        public void Configure(IApplicationBuilder app, IWebHostEnvironment env, UserManager<AccountInfo> userManager, RoleManager<AccountRole> roleManager)
         {
             if (env.IsDevelopment())
             {
                 app.UseDeveloperExceptionPage();
             }
+            app.UseAuthentication();
 
             app.UseHttpsRedirection();
 
@@ -140,6 +217,9 @@ namespace UserService
             app.UseRouting();
 
             app.UseAuthorization();
+
+            // Seeding the identity tables 
+            IdentityDataInitializer.SeedData(userManager, roleManager);
 
             app.UseEndpoints(endpoints =>
             {

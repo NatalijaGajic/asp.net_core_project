@@ -8,6 +8,7 @@ using UserService.Entities;
 
 namespace UserService.Entities
 {
+    //TODO: delete role, role is stored only in identity tables
     /// <summary>
     /// Entity class which models user and his account in the system
     /// </summary>
@@ -28,14 +29,6 @@ namespace UserService.Entities
         [StringLength(50)]
         [Required]
         public String Email { get; set; }
-
-        /// <summary>
-        /// User's password
-        /// </summary>
-        [Column("Password")]
-        [StringLength(50)]
-        [Required]
-        public String Password { get; set; }
 
         /// <summary>
         /// Boolean value which indicates if user's account
