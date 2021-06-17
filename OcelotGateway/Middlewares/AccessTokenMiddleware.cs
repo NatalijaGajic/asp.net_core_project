@@ -1,28 +1,40 @@
 ﻿using Microsoft.AspNetCore.Http;
-using Ocelot.Middleware;
+using OcelotGateway.Models;
+using OcelotGateway.Services;
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 
 namespace OcelotGateway.Middlewares
 {
-    public class AccessTokenMiddleware : OcelotPipelineConfiguration
+    public class AccessTokenMiddleware : IMiddleware
     {
-        public AccessTokenMiddleware()
+        private readonly IAuthService _authService;
+        public AccessTokenMiddleware(IAuthService authService)
         {
-            PreAuthenticationMiddleware = async (ctx, next) =>
-            {
-                await ProcessRequest(ctx, next);
-            };
+            _authService = authService;
         }
 
-        public async Task ProcessRequest(HttpContext context, System.Func<Task> next)
+        //UpstreamPath /cities
+        private static ArrayList protectedPaths = new ArrayList {
+            "/cities"
+        };
+
+
+        public async Task InvokeAsync(HttpContext context, RequestDelegate next)
         {
-            string token = "";
-            context.Request.Headers["Authorization"] = "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjgxYzMwNmExLTJhNWMtNGM5NC1mMzhhLTA4ZDkyY2RmNDhkMiIsInJvbGUiOiJSZWd1bGFyIHVzZXIiLCJuYmYiOjE2MjM3NjI0NDksImV4cCI6MTYyMzc2OTY0OSwiaWF0IjoxNjIzNzYyNDQ5fQ.Isgc8rMlXpoyE9_Zg4ywiQKunslB4BE8BmCwxSpZeFw";
+            string path = context.Request.Path.Value.ToString();
+            if (protectedPaths.Contains(path))
+            {
+                AuthenticationResponse res = _authService.getAccessToken("").Result;
+                string token = res.Token;
+                context.Request.Headers["Authorization"] = "Bearer " + token;
+            }
+
             //return;
-            await next.Invoke();
+            await next(context);
         }
     }
 }
