@@ -27,6 +27,7 @@ using UserService.Options;
 using UserService.Services;
 using UserService.Services.Cities;
 using UserService.Services.Users;
+using UserService.Services.Roles;
 
 namespace UserService
 {
@@ -87,7 +88,7 @@ namespace UserService
                         {
                             ContentTypes = { "application/problem+json" }
                         };
-                    };
+                    }
 
                     //ukoliko postoji nešto što nije moglo da se parsira hoćemo da vraćamo status 400 kao i do sada
                     problemDetails.Status = StatusCodes.Status400BadRequest;
@@ -118,6 +119,7 @@ namespace UserService
             services.AddScoped<IRoleRepository, RoleRepository>();
             services.AddScoped<IPersonalUsersService, PersonalUsersService>();
             services.AddScoped<ICitiesService, CitiesService>();
+            services.AddScoped<IRolesService, RolesService>();
             services.AddScoped<ICorporationUsersService, CorporationUsersService>();
             services.AddScoped<ResourceOwnerFilter>();
 
@@ -150,7 +152,7 @@ namespace UserService
 
             services.AddSwaggerGen(setupAction =>
             {
-                setupAction.SwaggerDoc("ExamRegistrationOpenApiSpecification",
+                setupAction.SwaggerDoc("UserServiceOpenApiSpecification",
                     new Microsoft.OpenApi.Models.OpenApiInfo()
                     {
                         Title = "User Service API",
@@ -208,9 +210,11 @@ namespace UserService
 
             app.UseSwagger();
 
-            app.UseSwaggerUI(setupAction =>
+
+
+           app.UseSwaggerUI(setupAction =>
             {
-                setupAction.SwaggerEndpoint("/swagger/ExamRegistrationOpenApiSpecification/swagger.json", "Student Exam Registration API");
+                setupAction.SwaggerEndpoint("/swagger/UserServiceOpenApiSpecification/swagger.json", "User Service API");
                 setupAction.RoutePrefix = ""; //No /swagger in url
             });
 

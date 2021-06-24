@@ -23,6 +23,8 @@ namespace UserService.Controllers
     /// Contoller with endopoints for fetching, creating, updating
     /// and deleting corporate user accounts
     /// </summary>
+    [Consumes("application/json")]
+    [Produces("application/json")]
     [ApiController]
     [Route("api/corporationUsers")]
     public class CorporationUserController : ControllerBase
@@ -121,13 +123,13 @@ namespace UserService.Controllers
         [ProducesResponseType(StatusCodes.Status409Conflict)]
         [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
         [ProducesResponseType(StatusCodes.Status500InternalServerError)]
-        public async Task<ActionResult<CorporationUserCreatedConfirmationDto>> CreateUser([FromBody] CorporationUserCreationDto corporationUser)
+        public ActionResult<CorporationUserCreatedConfirmationDto> CreateUser([FromBody] CorporationUserCreationDto corporationUser)
         {
             try
             {
                 
                 Corporation userEntity = _mapper.Map<Corporation>(corporationUser);
-                CorporationUserCreatedConfirmation userCreated = _corporationUsersService.CreateUser(userEntity, corporationUser.Password).Result;
+                CorporationUserCreatedConfirmation userCreated = _corporationUsersService.CreateUser(userEntity, corporationUser.Password);
                
 
                 string location = _linkGenerator.GetPathByAction("GetUserById", "CorporationUser", new { userId = userCreated.UserId });

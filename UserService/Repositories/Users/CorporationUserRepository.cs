@@ -49,6 +49,22 @@ namespace UserService.Data
                 ToList();
         }
 
+        public List<Corporation> GetUsersWithCity(Guid id)
+        {
+            return context.Corporation.Include(user => user.City).Where(city => city.CityId == id).ToList();
+
+        }
+
+        public Corporation GetUserWithEmail(string email)
+        {
+            return context.Corporation.FirstOrDefault(user => user.Email == email);
+        }
+
+        public List<Corporation> GetUsersWithRole(Guid id)
+        {
+            return context.Corporation.Include(user => user.Role).Where(role => role.RoleId == id).ToList();
+        }
+
         public bool SaveChanges()
         {
             return context.SaveChanges() > 0;

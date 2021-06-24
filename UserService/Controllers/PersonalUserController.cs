@@ -24,6 +24,8 @@ namespace UserService.Controllers
     /// Contoller with endopoints for fetching, creating, updating
     /// and deleting personal user accounts
     /// </summary>
+    [Consumes("application/json")]
+    [Produces("application/json")]
     [ApiController]
     [Route("api/personalUsers")]
     public class PersonalUserController : ControllerBase
@@ -92,10 +94,6 @@ namespace UserService.Controllers
         {
             try
             {
-               /* if (!HttpContext.GetUserRole().Equals("Admin") && !HttpContext.GetUserId().Equals(userId.ToString()))
-                {
-                    return StatusCode(StatusCodes.Status400BadRequest, "You do not own the resource, action is restricted to the owner of the resource");
-                }*/
                 var personalUser = _personalUsersService.GetUserByUserId(userId);
                 if (personalUser == null)
                 {
@@ -123,7 +121,6 @@ namespace UserService.Controllers
         /// <response code="422">Constraint violation</response>
         /// <response code="500">There was an error on the server</response>
         [HttpPost]
-        [Consumes("application/json")]
         [ProducesResponseType(StatusCodes.Status201Created)]
         [ProducesResponseType(StatusCodes.Status409Conflict)]
         [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
@@ -134,7 +131,7 @@ namespace UserService.Controllers
             {
                 PersonalUser userEntity = _mapper.Map<PersonalUser>(personalUser);
 
-                PersonalUserCreatedConfirmation userCreated = _personalUsersService.CreateUser(userEntity, personalUser.Password).Result;
+                PersonalUserCreatedConfirmation userCreated = _personalUsersService.CreateUser(userEntity, personalUser.Password);
 
                 string location = _linkGenerator.GetPathByAction("GetUserById", "PersonalUser", new { userId = userCreated.UserId });
 
@@ -186,7 +183,6 @@ namespace UserService.Controllers
         [Authorize]
         [ServiceFilter(typeof(ResourceOwnerFilter))]
         [HttpPut("{userId}")]
-        [Consumes("application/json")]
         [ProducesResponseType(StatusCodes.Status401Unauthorized)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -194,7 +190,7 @@ namespace UserService.Controllers
         [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status500InternalServerError)]
-        public async Task<ActionResult<PersonalUserDto>> UpdateUser([FromBody] PersonalUserUpdateDto personalUser, Guid userId)
+        public ActionResult<PersonalUserDto> UpdateUser([FromBody] PersonalUserUpdateDto personalUser, Guid userId)
         {
             try
             {
@@ -286,7 +282,6 @@ namespace UserService.Controllers
         /// <response code="500">There was an error on the server</response>
         [Authorize(Roles="Admin")]
         [HttpPost("admins")]
-        [Consumes("application/json")]
         [ProducesResponseType(StatusCodes.Status401Unauthorized)]
         [ProducesResponseType(StatusCodes.Status409Conflict)]
         [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
@@ -299,7 +294,7 @@ namespace UserService.Controllers
                 PersonalUser userEntity = _mapper.Map<PersonalUser>(personalUser);
 
                 //Adding to userdbcontext tables
-                PersonalUserCreatedConfirmation userCreated = _personalUsersService.CreateAdmin(userEntity, personalUser.Username).Result;
+                PersonalUserCreatedConfirmation userCreated = _personalUsersService.CreateAdmin(userEntity, personalUser.Username);
 
                 string location = _linkGenerator.GetPathByAction("GetUserById", "PersonalUser", new { userId = userCreated.UserId });
                 return Created(location, _mapper.Map<PersonalUserCreatedConfirmationDto>(userCreated));

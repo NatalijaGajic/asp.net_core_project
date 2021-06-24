@@ -20,6 +20,8 @@ namespace UserService.Controllers
     /// <summary>
     /// Contoller with endopoints for fetching user accounts
     /// </summary>
+    [Consumes("application/json")]
+    [Produces("application/json")]
     [ApiController]
     [Route("api/users")]
     [Authorize]
@@ -64,7 +66,7 @@ namespace UserService.Controllers
                     List<UserInfoDto> users = new List<UserInfoDto>();
                     users.AddRange(_mapper.Map<List<UserInfoDto>>(personalUsers));
                     users.AddRange(_mapper.Map<List<UserInfoDto>>(corporations));
-                    if (users == null || users.Count == 0)
+                    if (users.Count == 0)
                     {
                         return NoContent();
                     }

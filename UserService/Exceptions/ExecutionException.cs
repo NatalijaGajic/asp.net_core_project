@@ -6,14 +6,14 @@ using System.Threading.Tasks;
 namespace UserService.Exceptions
 {
     [Serializable]
-    public class ForeignKeyConstraintViolationException: Exception
+    public class ExecutionException: Exception
     {
-        public ForeignKeyConstraintViolationException(string message)
-   : base(message)
+        public ExecutionException(string message)
+: base(message)
         {
 
         }
-        public ForeignKeyConstraintViolationException(string message, Exception inner)
+        public ExecutionException(string message, Exception inner)
              : base(message, inner)
         {
 
