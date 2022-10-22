@@ -11,6 +11,7 @@ namespace UserService
 {
     public static class Program
     {
+        //Adding Sonar Cloud analysis
         public static void Main(string[] args)
         {
             CreateHostBuilder(args).Build().Run();
